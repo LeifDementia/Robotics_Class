@@ -1,78 +1,85 @@
-package org.firstinspires.ftc.teamcode.Teleops;
+package org.firstinspires.ftc.teamcode.SampleCode;
 
-import com.acmerobotics.dashboard.FtcDashboard;
-import com.acmerobotics.dashboard.config.Config;
-import com.arcrobotics.ftclib.gamepad.GamepadEx;
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.OpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.util.ElapsedTime;
+import com.arcrobotics.ftclib.controller.PIDController;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import org.firstinspires.ftc.robotcore.external.Telemetry;
+/**
+ *  The purpose of this class is to demonstrate how to program an elevator while using a PID
+ *  controller. Adding @Config allows you to modify values in the FTCDashboard by declaring them here
+ *  as public static instance variables.
+ */
+public class PID_Motor {
+    private final DcMotorEx motor;
+    private int targetPosition = 0;
+    private final PIDController controller;
 
-@Config       //if you want config
-@TeleOp       //if this is a teleop
-//@Autonomous   //if this is an auto
-public class   TestOp extends OpMode {
-    // Declare OpMode members.
-    private ElapsedTime runtime = new ElapsedTime();
-    GamepadEx g1;
+    // use a digital level and determine the starting angle. level (straight out) is 0 degrees
+    private int startingAngleInDegrees;
 
-    //this section allows us to access telemetry data from a browser
-    FtcDashboard dashboard = FtcDashboard.getInstance();
-    Telemetry dashboardTelemetry = dashboard.getTelemetry();
-    DcMotor myMotor;
+    // @Config variables
+    public static double kP = 0;
+    public static double kI = 0;
+    public static double kD = 0;
+    public static int position1 = 200;
+    public static int position2 = 600;
+    public static double maxPower = .4; // used to limit max power to motor, increase as necessary
 
-    /*
-     * Code to run ONCE when the driver hits INIT
-     */
-    @Override
-    public void init() {
-        // Initialize the hardware variables. Note that the strings used here as parameters
-        // to 'get' must correspond to the names assigned during the robot configuration
-        // step
-        g1 = new GamepadEx(gamepad1);
 
-        myMotor = hardwareMap.get(DcMotor.class,"myMotor");
+    public PID_Motor(HardwareMap hardwareMap) {
+        motor = hardwareMap.get(DcMotorEx.class, "[device name in robot config]");
 
-        // Tell the driver that initialization is complete.
-        dashboardTelemetry.addData("Status", "Initialized");
-        dashboardTelemetry.update();
+        // uncomment this line if the motor is going in the wrong direction. Positive should be up.
+        // motor.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        motor.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.BRAKE);
+        motor.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
+        motor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
+        controller = new PIDController(kP, kI, kD);
     }
 
-    /*
-     * Code to run REPEATEDLY after the driver hits INIT, but before they hit START
-     */
-    @Override
-    public void init_loop() {
+    // when given positive values, the arm should go up
+    public void manualMove(double input) {
+        motor.setPower(input);
     }
 
-    /*
-     * Code to run ONCE when the driver hits START
-     */
-    @Override
-    public void start() {
-        runtime.reset();
-        myMotor.setPower(.5);
-
+    public void goToPosition1(){
+        targetPosition = position1;
     }
 
-    /*
-     * Code to run REPEATEDLY after the driver hits START but before they hit STOP
-     */
-    @Override
-    public void loop() {
-        g1.readButtons();
-        dashboardTelemetry.addData("Status", "Run Time: " + runtime.toString());
-        dashboardTelemetry.update();
+    public void goToPosition2(){
+        targetPosition = position2;
     }
 
-    /*
-     * Code to run ONCE after the driver hits STOP
+    public int error(){
+        return Math.abs(targetPosition- motor.getCurrentPosition());
+    }
+
+    /**
+     * use this to tune and to use your PID controlled arm. For tuning, graph the return of the error
+     * method and move between 2 set points of your choosing. Gradually increase P, starting from
+     * .00001 until the error is low. There should be no oscillation. Then gradually increase D,
+     * starting from .000001 until the error is almost 0.
      */
-    @Override
-    public void stop() {
-        myMotor.setPower(0);
+    public void update() {
+        controller.setPID(kP, kI, kD);
+        double output = this.controller.calculate(motor.getCurrentPosition(), this.targetPosition);
+        output = limiter(output, maxPower);
+        motor.setPower(output);
+    }
+
+    /**
+     * this will limit the input to a range of -limiter to limiter
+     * @param input the value to be limited
+     * @param limiter the max value the input can be
+     * @return the limited input
+     */
+    private double limiter(double input, double limiter){
+        if (input > limiter) {
+            input = limiter;
+        } else if (input < -limiter) {
+            input = -limiter;
+        }
+        return input;
     }
 }
